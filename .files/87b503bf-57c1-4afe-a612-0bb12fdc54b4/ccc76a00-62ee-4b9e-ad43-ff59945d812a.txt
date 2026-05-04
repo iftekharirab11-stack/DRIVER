@@ -1,0 +1,9 @@
+## 📊 SYSTEM DASHBOARD
+
+**User:** `demo_use`
+
+### ⚡ BACKGROUND JOBS
+🟢 No active jobs
+
+### 🧩 ACTIVE SKILLS
+`run_script`, `schedule_job`, `background_research`, `get_job_status`, `read_job_result`, `deep_research`

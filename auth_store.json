@@ -1,0 +1,36 @@
+{
+  "users": {
+    "SgXtnpRg9XxT-chfgvOIaA": {
+      "username": "demo_user",
+      "email": "demo@alpha.ai",
+      "tier": "free",
+      "token_usage_month": 0,
+      "created_at": "2026-05-03T17:23:51.756460",
+      "subscription_end": null
+    },
+    "r2TAdE_VRSPzYM4FBUobyw": {
+      "username": "demo_user",
+      "email": "demo@alpha.ai",
+      "tier": "free",
+      "token_usage_month": 0,
+      "created_at": "2026-05-03T17:23:53.040780",
+      "subscription_end": null
+    },
+    "tqsYEj-9VaXsQ6wRhOrDMQ": {
+      "username": "demo_user",
+      "email": "demo@alpha.ai",
+      "tier": "free",
+      "token_usage_month": 0,
+      "created_at": "2026-05-03T18:03:26.924457",
+      "subscription_end": null
+    },
+    "kP-VwWaBTsrhOH_CiLkL2w": {
+      "username": "demo_user",
+      "email": "demo@alpha.ai",
+      "tier": "free",
+      "token_usage_month": 0,
+      "created_at": "2026-05-04T07:36:11.091451",
+      "subscription_end": null
+    }
+  }
+}
