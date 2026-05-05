@@ -1,0 +1,15 @@
+## 📊 SYSTEM DASHBOARD
+
+**User:** `demo_user`
+**Status:** 🟢 ACTIVE
+
+### 🔗 INTEGRATIONS
+- **GitHub:** ✅ Connected
+- **Google Cal:** ✅ Connected
+
+### ⚡ ACTIVE JOBS
+*No active background tasks.*
+
+### 📈 SYSTEM
+- Queue depth: `0`
+- BG jobs running: `0`

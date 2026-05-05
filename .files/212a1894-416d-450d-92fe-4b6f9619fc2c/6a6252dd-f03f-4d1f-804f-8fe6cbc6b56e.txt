@@ -1,0 +1,25 @@
+## 🔧 Alpha Cowork - Live Operations
+
+### 📊 Task Queue
+- **Queued:** 0
+- **Running:** 0
+- **Completed:** 0
+- **Failed:** 0
+
+### 🔄 Background Jobs
+- **Active:** 0
+- **Queued:** 0
+
+*No active background jobs*
+
+### 📁 File Operations
+*No active file operations*
+
+### 📈 Workspace Stats
+- **Total files:** 6
+- **Active workers:** 2
+
+### ⚡ Quick Actions
+- **Triage Folder:** `/triage` - Organize workspace files
+- **Extract Data:** `/extract` - Process images/PDFs to Excel
+- **Teaching Mode:** `/teach` - Record session as reusable skill

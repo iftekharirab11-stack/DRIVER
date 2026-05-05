@@ -1,19 +1,15 @@
-# DRIVER/ui_telemetry.py
-# [GOAL] Build the per-user sidebar payload for Chainlit.
-
+import os
 from typing import Dict, Any, Optional
 from datetime import datetime
 
 
 class UserSession:
-    """Lightweight per-user session object."""
-
     def __init__(self, user_id: str, username: str = None):
-        self.user_id        = user_id
-        self.username       = username or f"user_{user_id[:8]}"
-        self.created_at     = datetime.now()
+        self.user_id         = user_id
+        self.username        = username or f"user_{user_id[:8]}"
+        self.created_at      = datetime.now()
         self.preferences: Dict[str, Any] = {}
-        self.active_projects             = []
+        self.active_projects = []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -24,7 +20,6 @@ class UserSession:
         }
 
 
-# In-process session store (use Redis/DB in production)
 _active_sessions: Dict[str, UserSession] = {}
 
 
@@ -35,16 +30,8 @@ def get_or_create_session(user_id: str, username: str = None) -> UserSession:
 
 
 def get_sidebar_data(user_id: str = "default") -> Dict[str, Any]:
-    """
-    Build the full sidebar payload for a given user session.
-
-    Returns a dict with keys:
-        user, system, connections, active_jobs, active_projects,
-        eta_map, quick_actions
-    """
     session = get_or_create_session(user_id)
 
-    # Gather task-queue and background-worker info
     try:
         from DRIVER.task_manager import task_queue
         queue_status = task_queue.get_status()
@@ -55,16 +42,13 @@ def get_sidebar_data(user_id: str = "default") -> Dict[str, Any]:
         from DRIVER.background_worker import bg_agent
         bg_jobs = bg_agent.get_job_status()
     except Exception:
-        bg_jobs = {"active_jobs": {}, "completed_files": []}
+        bg_jobs = {"active": {}, "completed_files": []}
 
-    # Build project list from memory (lazy import)
     active_projects = []
     try:
         from DRIVER.memory_system import memory_bank
         mems = memory_bank.get_memories("projects", limit=5)
-        active_projects = [
-            {"name": m["content"][:50], "status": "Active"} for m in mems
-        ]
+        active_projects = [{"name": m["content"][:50], "status": "Active"} for m in mems]
     except Exception:
         pass
 
@@ -74,51 +58,44 @@ def get_sidebar_data(user_id: str = "default") -> Dict[str, Any]:
             {"name": "Background Research", "status": "Idle"},
         ]
 
-    # Build ETA map for running jobs (from active_jobs dict)
     eta_map = {}
-    active_jobs_dict = bg_jobs.get("active_jobs", {})
-    for job, stat in active_jobs_dict.items():
-        if isinstance(stat, str) and "→" in str(stat):
+    for job, stat in bg_jobs.get("active", {}).items():
+        if "→" in str(stat):
             eta_map[job] = stat.split("→")[-1].strip()
 
-    # Active jobs list (for dashboard)
     active_jobs_list = [
         {"name": name, "progress": 50, "status": stat}
-        for name, stat in active_jobs_dict.items()
-        if isinstance(stat, str) and "Running" in str(stat)
+        for name, stat in bg_jobs.get("active", {}).items()
+        if "Running" in str(stat)
     ]
 
-    # Also include bg background jobs from queue
-    queue_active = bg_jobs.get("active", 0)
-    queue_queued = bg_jobs.get("queued", 0)
-    if queue_active or queue_queued:
-        active_jobs_list.append({
-            "name": "Background Queue",
-            "progress": 50,
-            "status": f"{queue_active} running, {queue_queued} queued"
-        })
+    # Connection monitor
+    from DRIVER.connection_monitor import monitor
 
     return {
         "user": session.to_dict(),
         "system": {
-            "status":                "🟢 Online",
-            "uptime":                "Active",
-            "background_jobs_active": bg_jobs.get("active", 0) + len(active_jobs_dict),
-            "queue_depth":           queue_status.get("queued", 0),
+            "status":                 "🟢 Online",
+            "uptime":                 "Active",
+            "background_jobs_active": len(bg_jobs.get("active", {})),
+            "queue_depth":            queue_status.get("queued", 0),
         },
-        # Keys used by app.py dashboard builder
-        "connections":  ["GitHub", "Google Cal"],  # hard-coded for demo; wire to real auth later
-        "active_jobs":  active_jobs_list,
-        "tier":         "Pro",
-        # Extra context
-        "active_projects": active_projects,
-        "eta_map":         eta_map,
+        "connections":       ["GitHub", "Google Cal"],
+        "active_jobs":       active_jobs_list,
+        "tier":              "Pro",
+        "active_projects":   active_projects,
+        "eta_map":           eta_map,
         "quick_actions": [
-            {"label": "New Research",    "tool": "background_research"},
-            {"label": "Check Calendar",  "tool": "list_calendar_events"},
-            {"label": "Write Script",    "tool": "write_to_workspace"},
-            {"label": "Execute Code",    "tool": "execute_python_code"},
+            {"label": "New Research",   "tool": "background_research"},
+            {"label": "Check Calendar", "tool": "list_calendar_events"},
+            {"label": "Write Script",   "tool": "write_to_workspace"},
+            {"label": "Execute Code",   "tool": "execute_python_code"},
         ],
+        "connections_detail": monitor.check_all(),
+        "missing_env":        monitor.get_missing_env_vars(),
+        "actions_required":   monitor.get_action_required(),
+        "health_score":       monitor.get_health_score(),
+        "primary_model":      os.getenv("PRIMARY_MODEL", "gpt-4o"),
     }
 
 
@@ -134,4 +111,3 @@ def add_user_project(user_id: str, project_name: str):
         "status":     "Active",
         "created_at": datetime.now().isoformat(),
     })
-    

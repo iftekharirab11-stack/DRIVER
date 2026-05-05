@@ -36,7 +36,7 @@ enabled = false
 sample_rate = 24000
 
 [features.mcp]
-enabled = false
+enabled = true
 
 [features.mcp.sse]
 enabled = true
