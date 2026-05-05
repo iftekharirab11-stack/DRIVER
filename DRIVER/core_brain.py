@@ -99,6 +99,27 @@ def get_all_tools() -> List:
     except Exception:
         pass
 
+    # ── Google Workspace MCP tools ─────────────────────
+    try:
+        from langchain_mcp_adapters.client import MCPClient
+        import asyncio
+
+        async def _load_mcp_tools():
+            client = MCPClient(
+                {"google_workspace": {
+                    "command": "uvx",
+                    "args":    ["google-workspace-mcp"],
+                    "env":     {"GOOGLE_CREDENTIALS_FILE": "credentials.json"},
+                }}
+            )
+            async with client:
+                return await client.get_tools()
+
+        mcp_tools = asyncio.run(_load_mcp_tools())
+        lc_tools += mcp_tools
+    except Exception as e:
+        print(f"[MCP] Google Workspace not loaded: {e}")
+
     return lc_tools
 
 

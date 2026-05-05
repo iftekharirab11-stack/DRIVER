@@ -248,7 +248,7 @@ class BackgroundAgent:
         queue_status = task_queue.get_status()
         
         return {
-            "active": queue_status.get("running", 0),
+            "active": {},  # Empty dict for compatibility with ui_telemetry.items() call
             "queued": queue_status.get("queued", 0),
             "completed_tasks": queue_status.get("completed", 0),
             "failed_tasks": queue_status.get("failed", 0),

@@ -1,0 +1,77 @@
+## 🖥️ ALPHA DASHBOARD
+
+**Model:** `gpt-4o`  🔴 Health `33/100`
+`███░░░░░░░`
+
+**Queue:** `0`  **BG Jobs:** `0`
+
+### 🔌 CONNECTIONS
+
+**LLM**
+
+| Service | Status | Note |
+|---------|--------|------|
+| 🔴 **OpenAI** | ❌ Error code: 401 - {'error': {'message': 'Incorrect API key p | |
+| 🔴 **Anthropic** | ❌ Error code: 401 - {'type': 'error', 'error': {'type': 'authe | |
+| 📦 **Google Gemini** | ❌ pip install google-generativeai | |
+| ⚠️ **Ollama (local)** | ❌ Server not running | |
+
+**Google**
+
+| Service | Status | Note |
+|---------|--------|------|
+| 🔐 **Gmail** | ❌ credentials.json missing — download from GCloud | |
+| 🔐 **Google Calendar** | ❌ credentials.json missing — download from GCloud | |
+| 🔐 **Google Drive** | ❌ credentials.json missing — download from GCloud | |
+| 🔐 **Google Docs** | ❌ credentials.json missing — download from GCloud | |
+| 🔐 **Google Sheets** | ❌ credentials.json missing — download from GCloud | |
+
+**Memory**
+
+| Service | Status | Note |
+|---------|--------|------|
+| ✅ **Local Memory** | ✅ Connected | — |
+| ✅ **SQLite Telemetry** | ✅ Connected | — |
+
+**Execution**
+
+| Service | Status | Note |
+|---------|--------|------|
+| ✅ **Python Executor** | ✅ Connected | — |
+| ✅ **Sandbox** | ✅ Connected | — |
+
+**MCP**
+
+| Service | Status | Note |
+|---------|--------|------|
+| 📦 **Google Workspace MCP** | ❌ uvx not found — install uv | |
+| ✅ **Tavily Search** | ✅ Connected | — |
+
+### 🔑 MISSING ENV VARS
+
+- `CHAINLIT_AUTH_SECRET`
+- `⚠️  DISCORD_BOT_TOKEN is set — remove it to stop Discord auto-open`
+
+### ⚡ ACTION REQUIRED
+
+- Download credentials.json from Google Cloud Console → APIs & Services → Credentials
+
+### 🔄 ACTIVE JOBS
+
+*No active background tasks.*
+
+### 📁 WORKSPACE
+
+*Empty*
+
+### 🚦 TASK ROUTER
+
+| Say this…        | Routes to          |
+|------------------|--------------------|
+| `research [topic]` | Background worker |
+| `email [person]`   | Gmail via MCP     |
+| `calendar [event]` | Google Calendar   |
+| `remember [info]`  | Memory system     |
+| `run [script.py]`  | Python Executor   |
+| `search [query]`   | Tavily Search     |
+| `status`           | Dashboard refresh |
