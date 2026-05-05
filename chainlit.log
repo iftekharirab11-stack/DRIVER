@@ -1,0 +1,8 @@
+2026-05-04 16:08:27 - INFO - chainlit - Your app is available at http://localhost:8000
+2026-05-04 16:10:59 - WARNING - chainlit - Translation file for en-BD not found. Using default translation en-US.
+2026-05-04 16:10:59 - WARNING - chainlit - Translated markdown file for en-BD not found. Defaulting to chainlit.md.
+2026-05-04 16:10:59 - INFO - chainlit - Missing custom logo. Falling back to default logo.
+2026-05-04 16:11:16 - WARNING - chainlit - Translation file for en-BD not found. Using default translation en-US.
+2026-05-04 17:00:42 - WARNING - chainlit - Translation file for en-BD not found. Using default translation en-US.
+2026-05-04 19:16:47 - WARNING - chainlit - Translation file for en-BD not found. Using default translation en-US.
+2026-05-04 19:17:27 - INFO - httpx - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 401 Unauthorized"
