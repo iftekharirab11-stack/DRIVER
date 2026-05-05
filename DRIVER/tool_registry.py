@@ -14,6 +14,7 @@ class ToolRegistry:
         self.tools: Dict[str, Callable] = {}
         self.metadata: Dict[str, Dict[str, Any]] = {}
         self.skills_folder = Path(skills_folder)
+        self._cowork_tools_registered = False
         
     def register(self, name: str = None, description: str = None):
         """Decorator to register a tool."""
@@ -29,6 +30,45 @@ class ToolRegistry:
             return func
         return decorator
     
+    def register_cowork_tools(self):
+        """Register all Alpha Cowork file system tools.
+        
+        These tools require a user_id parameter for sandbox isolation.
+        They are wrapped to work with LangChain Tool format.
+        """
+        if self._cowork_tools_registered:
+            return
+        
+        # Import cowork tools from executor_driver
+        from DRIVER.executor_driver import (
+            cowork_read_file,
+            cowork_write_file,
+            cowork_list_directory,
+            cowork_move_file,
+            cowork_create_archive,
+            cowork_count_files,
+        )
+        from DRIVER.executor_driver import execute_python_code, execute_shell_command, install_package, validate_workspace
+        
+        # Register each tool
+        cowork_tools = [
+            ("cowork_read_file", cowork_read_file, "Read a file from the sandbox workspace. Requires user_id."),
+            ("cowork_write_file", cowork_write_file, "Write a file to the sandbox workspace. Requires user_id."),
+            ("cowork_list_directory", cowork_list_directory, "List directory contents in sandbox. Requires user_id."),
+            ("cowork_move_file", cowork_move_file, "Move a file within sandbox. Requires user_id."),
+            ("cowork_create_archive", cowork_create_archive, "Create a zip archive of files. Requires user_id."),
+            ("cowork_count_files", cowork_count_files, "Count files in sandbox. Requires user_id."),
+            ("execute_python_code", execute_python_code, "Execute a Python script from WORKSPACE."),
+            ("execute_shell_command", execute_shell_command, "Execute a safe shell command."),
+            ("install_package", install_package, "Install a Python package via pip."),
+            ("validate_workspace", validate_workspace, "Validate workspace is writable."),
+        ]
+        
+        for name, func, desc in cowork_tools:
+            self.register(name=name, description=desc)(func)
+        
+        self._cowork_tools_registered = True
+    
     def discover(self):
         """Auto-discover and load all tools from skills folder."""
         if not self.skills_folder.exists():
@@ -43,12 +83,6 @@ class ToolRegistry:
             module_name = f"DRIVER.skills.{file.stem}"
             try:
                 module = importlib.import_module(module_name)
-                # Look for functions decorated with @register or exported in __all__
-                for attr_name in dir(module):
-                    attr = getattr(module, attr_name)
-                    if callable(attr) and hasattr(attr, "_is_tool"):
-                        # Already registered via decorator
-                        pass
             except Exception as e:
                 print(f"Failed to load skill {file.name}: {e}")
     
@@ -66,8 +100,12 @@ class ToolRegistry:
         
         langchain_tools = []
         for name, func in self.tools.items():
-            langchain_tools.append(StructuredTool.from_function(func))
+            try:
+                langchain_tools.append(StructuredTool.from_function(func))
+            except Exception as e:
+                print(f"Failed to wrap tool '{name}' for LangChain: {e}")
         return langchain_tools
+
 
 # Global registry instance
 registry = ToolRegistry()
