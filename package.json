@@ -1,0 +1,26 @@
+{
+  "name": "driver-db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/database.js",
+  "types": "dist/database.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "node dist/test-db.js",
+    "frontend:dev": "cd project/frontend && npm run dev",
+    "frontend:build": "cd project/frontend && npm run build",
+    "frontend:preview": "cd project/frontend && npm run preview"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "sql.js": "^1.14.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.21",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.8.3"
+  }
+}

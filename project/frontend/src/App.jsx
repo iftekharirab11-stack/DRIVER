@@ -1,22 +1,21 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AppProvider } from './state/appState';
-import Dashboard from './pages/Dashboard';
-import Connections from './pages/Connections';
-import History from './pages/History';
+import React, { useEffect } from 'react';
+import MainLayout from './components/layout/MainLayout';
+import { useSessionStore } from './store/sessionStore';
+import './styles/index.css';
 
 function App() {
+  const { sessionId, initSession } = useSessionStore();
+
+  useEffect(() => {
+    if (!sessionId) {
+      initSession();
+    }
+  }, [sessionId, initSession]);
+
   return (
-    <AppProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/connections" element={<Connections />} />
-          <Route path="/history" element={<History />} />
-        </Routes>
-      </Router>
-    </AppProvider>
+    <div className="h-screen w-full bg-black overflow-hidden">
+      <MainLayout />
+    </div>
   );
 }
 

@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { getTokens, isConnected, getToken, getUser } = require('../services/tokenStore');
-const { checkHealth } = require('../services/mcpClient');
+import { getTokens, isConnected, getToken, getUser } from '../services/tokenStore.js';
+import { checkHealth } from '../services/mcpClient.js';
 
 router.get('/', (req, res) => {
   const tokens = getTokens();
@@ -24,4 +24,4 @@ router.get('/health', async (req, res) => {
   res.json(health);
 });
 
-module.exports = router;
+export default router;

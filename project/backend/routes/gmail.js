@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { setTokens, clearTokens, isConnected } = require('../services/tokenStore');
+import { setTokens, clearTokens, isConnected } from '../services/tokenStore.js';
 
 router.get('/status', (req, res) => {
   const connected = isConnected('gmail');
@@ -52,27 +52,11 @@ router.post('/send', async (req, res) => {
     if (!isConnected('gmail')) {
       return res.status(401).json({ error: 'Not connected to Gmail' });
     }
-
     const { to, subject, body } = req.body;
-    
     res.json({ success: true, messageId: `msg_${Date.now()}` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-router.get('/search', async (req, res) => {
-  try {
-    if (!isConnected('gmail')) {
-      return res.status(401).json({ error: 'Not connected to Gmail' });
-    }
-
-    const { q } = req.query;
-    
-    res.json([]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-module.exports = router;
+export default router;
