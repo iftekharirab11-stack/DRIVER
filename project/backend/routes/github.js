@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { setTokens, clearTokens, isConnected, getToken, getUser } = require('../services/tokenStore');
+import { setTokens, clearTokens, isConnected, getToken, getUser } from '../services/tokenStore.js';
 
 router.get('/status', (req, res) => {
   const connected = isConnected('github');
@@ -63,4 +63,4 @@ router.get('/user', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

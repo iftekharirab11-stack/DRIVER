@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { setTokens, clearTokens, isConnected } = require('../services/tokenStore');
+import { setTokens, clearTokens, isConnected } from '../services/tokenStore.js';
 
 router.get('/status', (req, res) => {
   const connected = isConnected('drive');
@@ -52,13 +52,10 @@ router.delete('/files/:id', async (req, res) => {
     if (!isConnected('drive')) {
       return res.status(401).json({ error: 'Not connected to Google Drive' });
     }
-
-    const { id } = req.params;
-    
-    res.json({ success: true });
+    res.json({ success: true, message: 'File deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-module.exports = router;
+export default router;

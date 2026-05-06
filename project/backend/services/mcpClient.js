@@ -1,5 +1,5 @@
-const axios = require('axios');
-const { getToken } = require('./tokenStore');
+import axios from 'axios';
+import { getToken } from './tokenStore.js';
 
 const MCP_SERVERS = {
   github: 'http://localhost:3001',
@@ -51,20 +51,4 @@ const getGithubUser = async () => {
   return callTool('github', 'getUser');
 };
 
-const getEmails = async () => {
-  return callTool('gmail', 'listEmails');
-};
-
-const getDriveFiles = async () => {
-  return callTool('drive', 'listFiles');
-};
-
-module.exports = {
-  callTool,
-  checkHealth,
-  getGithubRepos,
-  getGithubUser,
-  getEmails,
-  getDriveFiles,
-  MCP_SERVERS
-};
+export { callTool, checkHealth, getGithubRepos, getGithubUser };

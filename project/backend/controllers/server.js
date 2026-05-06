@@ -1,20 +1,32 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
+import cors from 'cors';
+
 const app = express();
 
-const connectionsRouter = require('../routes/connections');
-const githubRouter = require('../routes/github');
-const gmailRouter = require('../routes/gmail');
-const driveRouter = require('../routes/drive');
+import connectionsRouter from '../routes/connections.js';
+import githubRouter from '../routes/github.js';
+import gmailRouter from '../routes/gmail.js';
+import driveRouter from '../routes/drive.js';
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3001',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID'],
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.use('/connections', connectionsRouter);

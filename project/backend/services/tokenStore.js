@@ -34,11 +34,4 @@ const getUser = (app) => {
   return tokens[app] ? tokens[app].user : null;
 };
 
-module.exports = {
-  getTokens,
-  setTokens,
-  clearTokens,
-  isConnected,
-  getToken,
-  getUser
-};
+export { getTokens, setTokens, clearTokens, isConnected, getToken, getUser };
