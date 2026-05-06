@@ -240,3 +240,7 @@
 2026-05-05 14:39:15 - INFO - httpx - HTTP Request: GET https://api.anthropic.com/v1/models "HTTP/1.1 401 Unauthorized"
 2026-05-05 14:39:20 - INFO - httpx - HTTP Request: GET https://api.openai.com/v1/models "HTTP/1.1 401 Unauthorized"
 2026-05-05 14:39:21 - INFO - httpx - HTTP Request: GET https://api.anthropic.com/v1/models "HTTP/1.1 401 Unauthorized"
+2026-05-05 14:39:26 - INFO - httpx - HTTP Request: GET https://api.openai.com/v1/models "HTTP/1.1 401 Unauthorized"
+2026-05-05 14:39:28 - INFO - httpx - HTTP Request: GET https://api.anthropic.com/v1/models "HTTP/1.1 401 Unauthorized"
+2026-05-05 14:39:33 - INFO - httpx - HTTP Request: GET https://api.openai.com/v1/models "HTTP/1.1 401 Unauthorized"
+2026-05-05 14:39:34 - INFO - httpx - HTTP Request: GET https://api.anthropic.com/v1/models "HTTP/1.1 401 Unauthorized"
