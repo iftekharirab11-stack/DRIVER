@@ -38,6 +38,7 @@ def get_all_tools() -> List:
         cowork_count_files,
     )
     from DRIVER.background_worker import bg_agent, BackgroundAgent
+    from DRIVER.chatnot_client import chatnot_chat, chatnot_health
 
     built_in_funcs = [
         # Memory tools
@@ -82,6 +83,12 @@ def get_all_tools() -> List:
     built_in_funcs += [
         bg_agent.get_job_status,
         bg_agent.read_job_result,
+    ]
+
+    # CHATNOT tools
+    built_in_funcs += [
+        chatnot_chat,
+        chatnot_health,
     ]
 
     # Convert plain functions to LangChain StructuredTools
@@ -129,22 +136,26 @@ def get_llm():
     cfg = get_provider_config()
     model = cfg.get("primary_brain", "gpt-4o")
 
-    if "gpt" in model.lower() or model.startswith("o"):
-        api_key = cfg.get("openai_key") or os.getenv("OPENAI_API_KEY")
-        return ChatOpenAI(model=model, temperature=0, api_key=api_key)
+    openai_key = cfg.get("openai_key") or os.getenv("OPENAI_API_KEY")
+    gemini_key = cfg.get("gemini_key") or os.getenv("GOOGLE_API_KEY")
+    anthropic_key = cfg.get("anthropic_key") or os.getenv("ANTHROPIC_API_KEY")
 
-    if "gemini" in model.lower():
+    if ("gpt" in model.lower() or model.startswith("o")) and openai_key:
+        return ChatOpenAI(model=model, temperature=0, api_key=openai_key)
+
+    if "gemini" in model.lower() and gemini_key:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        api_key = cfg.get("gemini_key") or os.getenv("GOOGLE_API_KEY")
-        return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=api_key)
+        return ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=gemini_key)
 
-    if "claude" in model.lower() or "anthropic" in model.lower():
+    if ("claude" in model.lower() or "anthropic" in model.lower()) and anthropic_key:
         from langchain_anthropic import ChatAnthropic
-        api_key = cfg.get("anthropic_key") or os.getenv("ANTHROPIC_API_KEY")
-        return ChatAnthropic(model=model, temperature=0, anthropic_api_key=api_key)
+        return ChatAnthropic(model=model, temperature=0, anthropic_api_key=anthropic_key)
 
-    # Default fallback
-    return ChatOpenAI(model="gpt-4o", temperature=0)
+    # If no valid LLM is configured, raise an explicit error instead of silently falling back to fake mode
+    raise RuntimeError(
+        f"❌ No valid LLM configuration found for model '{model}'. "
+        "Please configure at least one of: OPENAI_API_KEY, GOOGLE_API_KEY, or ANTHROPIC_API_KEY in your .env file."
+    )
 
 
 _SYSTEM_PROMPT = """You are Alpha, an autonomous AI assistant inside a SaaS framework.
@@ -158,6 +169,7 @@ Available capability categories:
   Execution → execute_python_code() / execute_shell_command()
   Research  → background_research() (runs async, returns immediately)
   Status    → get_job_status() / read_job_result()
+  CHATNOT   → chatnot_chat() / chatnot_health() for chatnot API access
 
 ALPHA COWORK RULES:
   1. ALWAYS create a task_plan.json before any file operation using create_task_plan()
@@ -206,6 +218,19 @@ def execute_task(user_input: str, use_orchestrator: bool = False) -> str:
     Returns:
         Agent's text response.
     """
+    from DRIVER.config_manager import get_provider_config
+    cfg = get_provider_config()
+    
+    # Check if any API key is configured
+    has_key = any([
+        cfg.get("openai_key") or os.getenv("OPENAI_API_KEY"),
+        cfg.get("gemini_key") or os.getenv("GOOGLE_API_KEY"),
+        cfg.get("anthropic_key") or os.getenv("ANTHROPIC_API_KEY"),
+    ])
+    
+    if not has_key:
+        return "I'm not configured with an API key yet. Please add OPENAI_API_KEY, GOOGLE_API_KEY, or ANTHROPIC_API_KEY to your .env file."
+
     if use_orchestrator:
         import asyncio
         from DRIVER.orchestrator import orchestrate_task

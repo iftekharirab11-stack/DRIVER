@@ -3,51 +3,115 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+import logging
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, Field, validator
 import os
+import re
+import time
+from typing import Optional
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from DRIVER.core_brain import execute_task
 from DRIVER.task_router import router
 from DRIVER.ui_telemetry import get_sidebar_data
+from session_manager import SessionStore
+
+# ── Session Management ───────────────────────────────────────────────────────
+
+sessions = SessionStore()
+
+# ── Input Validation Models ───────────────────────────────────────────────────
+
+class MessagePayload(BaseModel):
+    session_id: str = Field(..., min_length=36, max_length=36)
+    text: str = Field(..., min_length=1, max_length=1000)
+
+    @validator('session_id')
+    def validate_session_id(cls, v):
+        if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', v):
+            raise ValueError('Invalid session ID format')
+        return v
+
+class JobStatusPayload(BaseModel):
+    session_id: Optional[str] = Field(None, min_length=36, max_length=36)
+    job_name: str = Field(..., min_length=1, max_length=100)
+
+    @validator('session_id')
+    def validate_session_id(cls, v):
+        if v and not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', v):
+            raise ValueError('Invalid session ID format')
+        return v
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
 app = FastAPI(title="Alpha SaaS API", version="1.0")
 
+# Get allowed origins from environment or use default
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3001,http://localhost:3000").split(",")
+
+# Validate required environment variables
+REQUIRED_ENV_VARS = [
+    "OPENAI_API_KEY",
+    "PRIMARY_MODEL"
+]
+
+# Check if at least one LLM key is available
+llm_keys_available = any([
+    os.getenv("OPENAI_API_KEY"),
+    os.getenv("GOOGLE_API_KEY"),
+    os.getenv("ANTHROPIC_API_KEY")
+])
+
+missing_env_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+
+if not llm_keys_available:
+    raise RuntimeError(
+        "❌ CRITICAL: No LLM API keys configured. "
+        "Please set at least one of: OPENAI_API_KEY, GOOGLE_API_KEY, or ANTHROPIC_API_KEY in your .env file."
+    )
+
+if missing_env_vars:
+    print(f"⚠️  Warning: Missing recommended environment variables: {', '.join(missing_env_vars)}")
+    print("   Application will run but some features may be limited.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Session-ID", "X-Request-ID"],
 )
 
-# ── In-memory session store (replaces cl.user_session) ───────────────────────
+# Add monitoring middleware
+from DRIVER.monitoring_middleware import MonitoringMiddleware
+app.add_middleware(MonitoringMiddleware)
 
-class SessionStore:
-    def __init__(self):
-        self.sessions = {}
+# ── Error Handling ───────────────────────────────────────────────────────────
 
-    def create(self, user_id: str = "demo_user") -> str:
-        sid = str(uuid.uuid4())
-        self.sessions[sid] = {"user_id": user_id, "history": []}
-        return sid
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "Invalid request payload", "errors": exc.errors()},
+    )
 
-    def get(self, sid: str, key: str, default=None):
-        return self.sessions.get(sid, {}).get(key, default)
-
-    def set(self, sid: str, key: str, value):
-        if sid not in self.sessions:
-            self.sessions[sid] = {}
-        self.sessions[sid][key] = value
-
-sessions = SessionStore()
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 # ── Dashboard builder (unchanged logic, returns plain dict) ──────────────────
 
-def build_dashboard(user_id: str = "demo_user") -> dict:
+def build_dashboard(user_id: str) -> dict:
     data = get_sidebar_data(user_id)
 
     conns = data.get("connections_detail", [])
@@ -142,24 +206,44 @@ def build_dashboard(user_id: str = "demo_user") -> dict:
 
 # ── API Routes ────────────────────────────────────────────────────────────────
 
+API_PREFIX = "/api"
+
 @app.get("/")
 async def root():
     return {
         "service": "Alpha SaaS (no-chainlit)",
         "endpoints": {
-            "POST /session": "Create a new chat session",
-            "POST /message": "Send a message (JSON: {session_id, text})",
-            "GET /stream/{session_id}": "SSE stream for live dashboard updates",
-            "GET /dashboard": "Get current dashboard snapshot",
+            f"POST {API_PREFIX}/session": "Create a new chat session",
+            f"POST {API_PREFIX}/message": "Send a message (JSON: {{session_id, text}})",
+            f"GET {API_PREFIX}/stream/{{session_id}}": "SSE stream for live dashboard updates",
+            f"GET {API_PREFIX}/dashboard": "Get current dashboard snapshot",
         },
     }
 
-@app.post("/session")
-async def create_session():
-    sid = sessions.create()
-    return {"session_id": sid, "user_id": sessions.get(sid, "user_id")}
+@app.post(f"{API_PREFIX}/session")
+async def create_session(request: Request):
+    """
+    Create a new session with user authentication
+    """
+    # Get user ID from request - requires proper authentication
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required: X-User-ID header missing")
 
-@app.get("/dashboard")
+    try:
+        # Create session with proper user isolation
+        sid = sessions.create_for_user(user_id)
+
+        # Auto-cleanup if needed
+        sessions.auto_cleanup_if_needed()
+
+        logger.info(f"Session created: {sid} for user: {user_id}")
+        return {"session_id": sid, "user_id": user_id}
+    except RuntimeError as e:
+        logger.warning(f"Session creation failed for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=429, detail=str(e))
+
+@app.get(f"{API_PREFIX}/dashboard")
 async def get_dashboard():
     return build_dashboard()
 
@@ -168,17 +252,21 @@ async def get_dashboard():
 async def dashboard_event_generator(session_id: str):
     """Yield dashboard snapshots every 30s as Server-Sent Events."""
     while True:
-        await asyncio.sleep(30)
         try:
-            dash = build_dashboard(sessions.get(session_id, "user_id", "demo_user"))
+            await asyncio.sleep(30)
+            user_id = sessions.get(session_id, "user_id")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid session: user not found")
+            dash = build_dashboard(user_id)
             yield f"data: {json.dumps(dash)}\n\n"
-        except Exception:
+        except Exception as e:
+            print(f"SSE error: {str(e)}")
             yield 'event: error\ndata: {"error":"dashboard unavailable"}\n\n'
 
-@app.get("/stream/{session_id}")
+@app.get(f"{API_PREFIX}/stream/{{session_id}}")
 async def stream_dashboard(session_id: str):
-    if session_id not in sessions.sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+    if not sessions.is_valid_session(session_id):
+        raise HTTPException(status_code=404, detail="Session not found or expired")
     return StreamingResponse(
         dashboard_event_generator(session_id),
         media_type="text/event-stream",
@@ -187,7 +275,7 @@ async def stream_dashboard(session_id: str):
 
 # ── Message handler ───────────────────────────────────────────────────────────
 
-@app.post("/message")
+@app.post(f"{API_PREFIX}/message")
 async def handle_message(payload: dict):
     """
     JSON body:
@@ -196,24 +284,27 @@ async def handle_message(payload: dict):
       "text": "research cats"
     }
     """
-    session_id = payload.get("session_id")
-    text = payload.get("text", "").strip()
+    try:
+        validated = MessagePayload(**payload)
+        session_id = validated.session_id
+        text = validated.text.strip()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
 
-    if not session_id or session_id not in sessions.sessions:
-        raise HTTPException(status_code=400, detail="Invalid or missing session_id")
-    if not text:
-        raise HTTPException(status_code=400, detail="Missing 'text'")
+    if not sessions.is_valid_session(session_id):
+        raise HTTPException(status_code=400, detail="Invalid or expired session_id")
 
     route_info = router.route(text)
     label = route_info.get("tool_hint", "🤖 AI Agent")
 
-    user_id = sessions.get(session_id, "user_id", "demo_user")
+    user_id = sessions.get(session_id, "user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid session: user not found")
     history = sessions.get(session_id, "history", [])
 
     try:
-        # Pass user_id explicitly in case execute_task signature changes
         response = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: execute_task(text, user_id=user_id)
+            None, lambda: execute_task(text)
         )
     except Exception as e:
         response = (
@@ -243,7 +334,7 @@ async def handle_message(payload: dict):
         "job_status": job_status,
     }
 
-@app.get("/tasks/{task_id}")
+@app.get(f"{API_PREFIX}/tasks/{{task_id}}")
 async def get_task(task_id: str):
     """Get status of a specific task."""
     try:
@@ -253,12 +344,14 @@ async def get_task(task_id: str):
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-@app.post("/jobs/status")
+@app.post(f"{API_PREFIX}/jobs/status")
 async def check_job_status(payload: dict):
     """Check status of a background job."""
-    job_name = payload.get("job_name")
-    if not job_name:
-        raise HTTPException(status_code=400, detail="job_name required")
+    try:
+        validated = JobStatusPayload(**payload)
+        job_name = validated.job_name
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
     try:
         from DRIVER.background_worker import bg_agent
         status = bg_agent.get_job_status(job_name)
@@ -266,7 +359,7 @@ async def check_job_status(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-@app.post("/integrations")
+@app.post(f"{API_PREFIX}/integrations")
 async def list_integrations():
     """List available integrations and their status."""
     try:
@@ -275,38 +368,178 @@ async def list_integrations():
     except Exception as e:
         return []
 
-from fastapi import UploadFile, File
-
-@app.post("/files/upload")
-async def upload_file(session_id: str = None, file: UploadFile = File(...)):
+@app.post(f"{API_PREFIX}/files/upload")
+async def upload_file(file: UploadFile = File(...), session_id: str = None):
     """Upload a file to user's workspace."""
-    user_id = "demo_user"
+    # Validate file size and type
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    ALLOWED_FILE_TYPES = {
+        'text/plain': ['.txt'],
+        'text/markdown': ['.md'],
+        'application/json': ['.json'],
+        'text/csv': ['.csv'],
+        'application/pdf': ['.pdf'],
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+    }
+
+    # Check file size
+    if file.size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
+
+    # Check file extension
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    content_type = file.content_type
+    allowed_extensions = []
+
+    for mime_type, extensions in ALLOWED_FILE_TYPES.items():
+        if content_type == mime_type:
+            allowed_extensions = extensions
+            break
+
+    if not allowed_extensions or file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type not allowed. Allowed types: {', '.join(sum(ALLOWED_FILE_TYPES.values(), []))}"
+        )
+
+    # Validate session if provided
+    if session_id and not sessions.is_valid_session(session_id):
+        raise HTTPException(status_code=400, detail="Invalid or expired session ID")
+
+    # Get user_id from session
+    if session_id:
+        user_id = sessions.get(session_id, "user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid session: user not found")
+    else:
+        # For file uploads without session, require authentication header
+        user_id = request.headers.get("X-User-ID")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required for file upload")
+
     from DRIVER.sandbox_driver import write_to_sandbox, create_sandbox
     create_sandbox(user_id)
-    
-    content = await file.read()
+
     try:
-        text = content.decode('utf-8')
-        result = write_to_sandbox(user_id, file.filename, text)
+        content = await file.read()
+
+        # For text files, try to decode as UTF-8
+        if content_type.startswith('text/') or file_ext in ['.json', '.md', '.txt', '.csv']:
+            try:
+                text = content.decode('utf-8')
+                result = write_to_sandbox(user_id, file.filename, text)
+            except UnicodeDecodeError:
+                # If UTF-8 decode fails, save as binary
+                result = write_to_sandbox(user_id, file.filename, content, is_binary=True)
+        else:
+            # For binary files, save as-is
+            result = write_to_sandbox(user_id, file.filename, content, is_binary=True)
+
         return {"filename": file.filename, "path": result, "status": "uploaded"}
     except Exception as e:
-        return {"error": str(e), "status": "failed"}
+        raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
-@app.get("/files")
+@app.get(f"{API_PREFIX}/files")
 async def list_files():
     """List files in workspace."""
+    # Get user_id from session or authentication header
+    user_id = None
+    if session_id:
+        user_id = sessions.get(session_id, "user_id")
+
+    if not user_id:
+        user_id = request.headers.get("X-User-ID")
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     from DRIVER.sandbox_driver import list_directory, create_sandbox
-    create_sandbox("demo_user")
-    files = list_directory("demo_user")
+    create_sandbox(user_id)
+    files = list_directory(user_id)
     return {"files": files}
 
-@app.get("/files/{filename}")
+@app.get(f"{API_PREFIX}/files/{{filename}}")
 async def read_file(filename: str):
     """Read a file from workspace."""
+    # Get user_id from session or authentication header
+    user_id = None
+    session_id = request.headers.get("X-Session-ID")
+    if session_id:
+        user_id = sessions.get(session_id, "user_id")
+
+    if not user_id:
+        user_id = request.headers.get("X-User-ID")
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     from DRIVER.sandbox_driver import read_from_sandbox
-    content = read_from_sandbox("demo_user", filename)
+    content = read_from_sandbox(user_id, filename)
     return {"filename": filename, "content": content}
 
-@app.get("/health")
+@app.get(f"{API_PREFIX}/health")
 async def health():
     return {"status": "ok"}
+
+# ── Monitoring Endpoints ───────────────────────────────────────────────────────
+
+@app.get(f"{API_PREFIX}/monitoring/metrics")
+async def get_monitoring_metrics():
+    """Get performance monitoring metrics"""
+    from DRIVER.monitoring_middleware import get_performance_monitor
+    monitor = get_performance_monitor()
+
+    return {
+        "service": "Alpha SaaS Monitoring",
+        "metrics": monitor.get_metrics(),
+        "timestamp": time.time()
+    }
+
+@app.get(f"{API_PREFIX}/monitoring/sessions")
+async def get_active_sessions():
+    """Get active session information"""
+    active_sessions = []
+    for sid, session in sessions.sessions.items():
+        if sessions._is_session_valid(session):
+            active_sessions.append({
+                "session_id": sid,
+                "user_id": session.get("user_id", "unknown"),
+                "created_at": session.get("created_at"),
+                "last_accessed": session.get("last_accessed"),
+                "history_count": len(session.get("history", []))
+            })
+
+    return {
+        "active_sessions": len(active_sessions),
+        "sessions": active_sessions,
+        "timestamp": time.time()
+    }
+
+@app.get(f"{API_PREFIX}/monitoring/ai")
+async def get_ai_metrics():
+    """Get AI orchestration metrics"""
+    from DRIVER.ai_orchestrator import get_ai_orchestrator, get_ai_context_manager
+
+    orchestrator = get_ai_orchestrator()
+    context_manager = get_ai_context_manager()
+
+    return {
+        "service": "Alpha SaaS AI Monitoring",
+        "orchestration_metrics": orchestrator.get_metrics(),
+        "context_metrics": context_manager.get_context_summary(),
+        "timestamp": time.time()
+    }
+
+@app.get(f"{API_PREFIX}/monitoring/ai/reset")
+async def reset_ai_metrics():
+    """Reset AI monitoring metrics"""
+    from DRIVER.ai_orchestrator import get_ai_orchestrator
+
+    orchestrator = get_ai_orchestrator()
+    orchestrator.reset_metrics()
+
+    return {
+        "status": "success",
+        "message": "AI metrics reset successfully",
+        "timestamp": time.time()
+    }

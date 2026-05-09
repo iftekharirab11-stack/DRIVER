@@ -12,6 +12,7 @@ ROUTES = [
     (r"^(file|read|write|open|workspace)\s+(.+)",                     "workspace",           "📁 Workspace"),
     (r"^(drive|doc|sheet|slide|docs|sheets)\s*(.+)?",                 "google_mcp",          "🗂️ Google Workspace"),
     (r"^(search|look up|find|web)\s+(.+)",                            "search",              "🌐 Web Search"),
+    (r"^(chatnot|chat|ch@tnot)\s+(.+)",                                "chatnot",             "💬 CHATNOT"),
 ]
 
 

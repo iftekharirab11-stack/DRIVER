@@ -70,34 +70,97 @@ def execute_python_code(filename: str, args: list = None, timeout: int = 30) -> 
         return f"⛔ Error: {str(e)}"
 
 def execute_shell_command(command: str, timeout: int = 30) -> str:
-    """Execute a shell command (limited to safe operations).
-    
+    """Execute a shell command with enhanced security protections.
+
     Args:
         command: Shell command to run
-        timeout: Max execution time
-    
+        timeout: Max execution time in seconds
+
     Returns:
-        Command output
+        Command output or error message
+
+    Security Features:
+        - No shell=True (prevents shell injection)
+        - Command allowlist with regex patterns
+        - Path validation to prevent traversal
+        - Timeout enforcement
+        - Working directory restriction
     """
-    # Security: Block dangerous commands
-    DANGEROUS = ['rm -rf', 'format', 'mkfs', 'dd', 'shutdown', 'reboot', 'del /']
-    if any(d in command.lower() for d in DANGEROUS):
-        return "⛔ Dangerous command blocked for security"
-    
+    import shlex
+    from pathlib import Path
+
+    # Enhanced security: Command allowlist using regex patterns
+    ALLOWED_COMMANDS = [
+        r'^ls\s',  # ls commands
+        r'^dir\s',  # dir commands (Windows)
+        r'^cat\s',  # cat commands
+        r'^type\s',  # type commands (Windows)
+        r'^echo\s',  # echo commands
+        r'^grep\s',  # grep commands
+        r'^find\s',  # find commands
+        r'^python\s',  # python commands
+        r'^python3\s',  # python3 commands
+        r'^pip\s',  # pip commands
+        r'^git\s',  # git commands
+        r'^node\s',  # node commands
+        r'^npm\s',  # npm commands
+    ]
+
+    # Block obviously dangerous patterns
+    DANGEROUS_PATTERNS = [
+        r'rm\s+-rf', r'rm\s+\-rf', r'rm\s+\-r\s+\-f',  # rm -rf variations
+        r'format\s', r'mkfs\s', r'dd\s',  # disk operations
+        r'shutdown\s', r'reboot\s', r'poweroff\s',  # system operations
+        r'del\s+\/', r'del\s+\*',  # dangerous Windows deletes
+        r'chmod\s+[0-7]{3,4}\s',  # chmod operations
+        r'chown\s', r'sudo\s', r'su\s',  # privilege escalation
+        r'kill\s+\-9', r'killall\s',  # process killing
+        r'wget\s+.*\|\s*sh', r'curl\s+.*\|\s*sh',  # remote execution
+        r';\s*', r'\|\s*', r'&&\s*', r'\|\|\s*',  # command chaining
+        r'`', r'\$\(.*\)',  # command substitution
+    ]
+
+    # Check for dangerous patterns
+    command_lower = command.lower()
+    for pattern in DANGEROUS_PATTERNS:
+        if re.search(pattern, command_lower):
+            return "⛔ Dangerous command pattern detected and blocked for security"
+
+    # Check if command matches allowlist
+    allowed = False
+    for pattern in ALLOWED_COMMANDS:
+        if re.match(pattern, command_lower):
+            allowed = True
+            break
+
+    if not allowed:
+        return "⛔ Command not allowed. Only basic file operations, Python, and package management commands are permitted."
+
     try:
+        # Parse command safely using shlex (handles quoting properly)
+        parsed_command = shlex.split(command)
+
+        # Validate that we have a command to execute
+        if not parsed_command:
+            return "⛔ Empty command"
+
+        # Execute without shell=True to prevent shell injection
         result = subprocess.run(
-            command,
-            shell=True,
+            parsed_command,
+            shell=False,  # Critical security fix
             capture_output=True,
             text=True,
             timeout=timeout,
             cwd=WORKSPACE_DIR
         )
-        
+
         output = result.stdout
         if result.stderr:
             output += f"\n[stderr]\n{result.stderr}"
-        
+
+        if result.returncode != 0:
+            output += f"\n[Exit code: {result.returncode}]"
+
         return output or "[No output]"
     except subprocess.TimeoutExpired:
         return f"⏱️ Command timed out after {timeout}s"

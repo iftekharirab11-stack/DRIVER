@@ -31,8 +31,8 @@ class BackgroundAgent:
         self.worker = BackgroundWorker("bg_agent_worker", max_concurrent=3)
         self._processing = False
     
-    async def run_complex_job(self, job_name: str, prompt: str, 
-                             user_id: str = "demo_user",
+    async def run_complex_job(self, job_name: str, prompt: str,
+                             user_id: str,
                              llm=None, tools=None) -> str:
         """
         Execute a long-running task in a thread and save output to WORKSPACE.
@@ -162,8 +162,8 @@ class BackgroundAgent:
         
         return result
     
-    async def run_parallel_tasks(self, tasks: List[Dict[str, Any]], 
-                                 user_id: str = "demo_user") -> Dict[str, Any]:
+    async def run_parallel_tasks(self, tasks: List[Dict[str, Any]],
+                                 user_id: str) -> Dict[str, Any]:
         """Run multiple tasks in parallel (Alpha Cowork).
         
         Example:
@@ -256,28 +256,29 @@ class BackgroundAgent:
             "completed_files": list(self.results.values())
         }
     
-    def read_job_result(self, job_name: str) -> str:
+    def read_job_result(self, job_name: str, user_id: str) -> str:
         """
         Read the WORKSPACE file written by a completed job.
-        
+
         Args:
             job_name: The job's name
-        
+            user_id: User identifier for sandbox isolation
+
         Returns:
             Job output content
         """
         if job_name not in self.results:
             return f"Job '{job_name}' not found or not yet completed."
-        
+
         filename = self.results[job_name]
-        
+
         # If it's a queue task ID, check queue status
         if isinstance(filename, str) and filename.startswith(("file_sort_", "doc_summary_")):
             from DRIVER.task_manager import task_queue
             status = task_queue.get_status(filename)
             return f"Background task status: {status}"
-        
-        return read_from_sandbox("demo_user", filename)
+
+        return read_from_sandbox(user_id, filename)
     
     async def wait_for_queue(self, timeout: float = 30.0) -> Dict[str, Any]:
         """Wait for all background tasks to complete.
@@ -317,7 +318,7 @@ bg_agent = BackgroundAgent()
 
 
 # Convenience function for quick background research
-async def background_research(topic: str, user_id: str = "demo_user") -> str:
+async def background_research(topic: str, user_id: str) -> str:
     """Start a background research job.
     
     Args:

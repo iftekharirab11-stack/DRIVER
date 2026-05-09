@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../../store/chatStore';
 import { useSessionStore } from '../../store/sessionStore';
-import { Paperclip, Send } from 'lucide-react';
+import { useActivityStore, ACTIVITY_TYPES } from '../../store/activityStore';
+import { useContextStore } from '../../store/contextStore';
+import { useWorkspaceStore } from '../../store/workspaceStore';
+import { Paperclip, Send, Attach, FolderPlus } from 'lucide-react';
 
 const ChatInput = () => {
   const [input, setInput] = useState('');
@@ -20,29 +23,16 @@ const ChatInput = () => {
 
   const uploadFile = async (file) => {
     if (!file || !sessionId) return;
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('session_id', sessionId);
-    
+
     try {
-      const response = await fetch('/files/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const result = await response.json();
-      
-      if (result.status === 'uploaded') {
-        const uploadMsg = {
-          id: Date.now(),
-          role: 'assistant',
-          content: `📎 Uploaded: \`${result.filename}\`\nPath: ${result.path}`,
-          timestamp: new Date(),
-        };
-        useChatStore.getState().addMessage(uploadMsg);
-      }
+      // Use the new file upload functionality
+      await useSessionStore.getState().uploadFile(file);
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.error('File upload failed:', error);
+      useActivityStore.getState().addActivity({
+        type: ACTIVITY_TYPES.ERROR,
+        text: `File upload failed: ${error.message}`
+      });
     }
   };
 
@@ -71,8 +61,18 @@ const ChatInput = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || isThinking) return;
-    await sendUserMessage(input.trim());
-    setInput('');
+
+    try {
+      // Use streaming method for better UX
+      await useSessionStore.getState().sendUserMessageStream(input.trim());
+      setInput('');
+    } catch (error) {
+      console.error('Message sending failed:', error);
+      useActivityStore.getState().addActivity({
+        type: ACTIVITY_TYPES.ERROR,
+        text: `Failed to send message: ${error.message}`
+      });
+    }
   };
 
   const handleKeyDown = (e) => {

@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  alpha-saas:
+    build: .
+    container_name: alpha-saas
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - CHATNOT_API_KEY=${CHATNOT_API_KEY}
+      - PRIMARY_MODEL=${PRIMARY_MODEL:-gpt-4o}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://localhost:3000}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+      - SANDBOX_ROOT=${SANDBOX_ROOT:-WORKSPACE}
+      - MAX_FILES_PER_OPERATION=${MAX_FILES_PER_OPERATION:-100}
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
+    volumes:
+      - ./storage:/app/storage
+      - ./WORKSPACE:/app/WORKSPACE
+    networks:
+      - alpha-network
+
+  # Optional: Add a reverse proxy (nginx) for production
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: alpha-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf
+  #     - ./ssl:/etc/nginx/ssl
+  #   depends_on:
+  #     - alpha-saas
+  #   networks:
+  #     - alpha-network
+
+networks:
+  alpha-network:
+    driver: bridge
+
+volumes:
+  storage:
+  workspace:

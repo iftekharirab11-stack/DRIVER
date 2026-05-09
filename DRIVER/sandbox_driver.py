@@ -296,7 +296,3 @@ def cleanup_sandbox(user_id: str, keep_files: bool = False) -> str:
     except Exception as e:
         return f"Error during cleanup: {str(e)}"
 
-# Initialize default sandbox for demo
-DEFAULT_USER_ID = "demo_user"
-if not get_sandbox_path(DEFAULT_USER_ID):
-    create_sandbox(DEFAULT_USER_ID)
