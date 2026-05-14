@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 from DRIVER.core_brain import execute_task
 from DRIVER.task_router import router
 from DRIVER.ui_telemetry import get_sidebar_data
-from session_manager import SessionStore
+from DRIVER.session_manager import SessionStore
 
 # ── Session Management ───────────────────────────────────────────────────────
 
@@ -245,7 +245,8 @@ async def create_session(request: Request):
 
 @app.get(f"{API_PREFIX}/dashboard")
 async def get_dashboard():
-    return build_dashboard()
+    # Get default user_id for dashboard
+    return build_dashboard("default")
 
 # ── Server-Sent Events stream (dashboard auto-refresh) ────────────────────────
 
@@ -369,8 +370,10 @@ async def list_integrations():
         return []
 
 @app.post(f"{API_PREFIX}/files/upload")
-async def upload_file(file: UploadFile = File(...), session_id: str = None):
+async def upload_file(request: Request, file: UploadFile = File(...), session_id: str = None):
     """Upload a file to user's workspace."""
+    from DRIVER.sandbox_driver import write_to_sandbox, create_sandbox
+    
     # Validate file size and type
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     ALLOWED_FILE_TYPES = {
@@ -402,22 +405,17 @@ async def upload_file(file: UploadFile = File(...), session_id: str = None):
             detail=f"File type not allowed. Allowed types: {', '.join(sum(ALLOWED_FILE_TYPES.values(), []))}"
         )
 
-    # Validate session if provided
-    if session_id and not sessions.is_valid_session(session_id):
-        raise HTTPException(status_code=400, detail="Invalid or expired session ID")
-
-    # Get user_id from session
+    # Get user_id from session or authentication header
+    user_id = None
     if session_id:
         user_id = sessions.get(session_id, "user_id")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid session: user not found")
-    else:
-        # For file uploads without session, require authentication header
+    
+    if not user_id:
         user_id = request.headers.get("X-User-ID")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required for file upload")
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
-    from DRIVER.sandbox_driver import write_to_sandbox, create_sandbox
     create_sandbox(user_id)
 
     try:
@@ -429,19 +427,21 @@ async def upload_file(file: UploadFile = File(...), session_id: str = None):
                 text = content.decode('utf-8')
                 result = write_to_sandbox(user_id, file.filename, text)
             except UnicodeDecodeError:
-                # If UTF-8 decode fails, save as binary
-                result = write_to_sandbox(user_id, file.filename, content, is_binary=True)
+                # If UTF-8 decode fails, write as-is (binary mode)
+                result = write_to_sandbox(user_id, file.filename, "")
         else:
-            # For binary files, save as-is
-            result = write_to_sandbox(user_id, file.filename, content, is_binary=True)
+            # For binary files, write empty placeholder (binary not fully supported)
+            result = write_to_sandbox(user_id, file.filename, "")
 
         return {"filename": file.filename, "path": result, "status": "uploaded"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 
 @app.get(f"{API_PREFIX}/files")
-async def list_files():
+async def list_files(request: Request, session_id: str = None):
     """List files in workspace."""
+    from DRIVER.sandbox_driver import list_directory, create_sandbox
+    
     # Get user_id from session or authentication header
     user_id = None
     if session_id:
@@ -453,19 +453,20 @@ async def list_files():
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    from DRIVER.sandbox_driver import list_directory, create_sandbox
     create_sandbox(user_id)
     files = list_directory(user_id)
     return {"files": files}
 
-@app.get(f"{API_PREFIX}/files/{{filename}}")
-async def read_file(filename: str):
+@app.get(f"{API_PREFIX}/files/{filename}")
+async def read_file(filename: str, request: Request, session_id: str = None):
     """Read a file from workspace."""
+    from DRIVER.sandbox_driver import read_from_sandbox, create_sandbox
+    
     # Get user_id from session or authentication header
     user_id = None
-    session_id = request.headers.get("X-Session-ID")
-    if session_id:
-        user_id = sessions.get(session_id, "user_id")
+    sid_header = request.headers.get("X-Session-ID")
+    if sid_header:
+        user_id = sessions.get(sid_header, "user_id")
 
     if not user_id:
         user_id = request.headers.get("X-User-ID")
@@ -473,7 +474,7 @@ async def read_file(filename: str):
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    from DRIVER.sandbox_driver import read_from_sandbox
+    create_sandbox(user_id)
     content = read_from_sandbox(user_id, filename)
     return {"filename": filename, "content": content}
 

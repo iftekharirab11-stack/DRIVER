@@ -59,9 +59,6 @@ def get_all_tools() -> List:
         cowork_move_file,
         cowork_create_archive,
         cowork_count_files,
-        # Background worker
-        bg_agent.get_job_status,
-        bg_agent.read_job_result,
         # Registry tools
         system_status, list_all_tools,
     ]
@@ -78,12 +75,6 @@ def get_all_tools() -> List:
         ]
     except Exception:
         pass  # Google Calendar credentials not configured
-
-    # Background-worker async methods (wrapped)
-    built_in_funcs += [
-        bg_agent.get_job_status,
-        bg_agent.read_job_result,
-    ]
 
     # CHATNOT tools
     built_in_funcs += [
@@ -255,13 +246,16 @@ def execute_batch(tasks: List[str], parallel: bool = False) -> Dict[str, str]:
     """
     if parallel and len(tasks) > 1:
         import asyncio
-        from DRIVER.task_manager import submit_task, run_all_tasks, task_queue
+        from DRIVER.task_manager import submit_task, run_all_tasks
 
         for i, task in enumerate(tasks):
             submit_task(f"batch_{i}", execute_task, task)
 
         asyncio.run(run_all_tasks())
-        return {str(i): task_queue.results.get(f"batch_{i}", "pending")
-                for i in range(len(tasks))}
+        results = {}
+        from DRIVER.task_manager import task_queue
+        for i in range(len(tasks)):
+            results[str(i)] = task_queue.get_status(f"batch_{i}").get("result", "pending")
+        return results
 
     return {str(i): execute_task(task) for i, task in enumerate(tasks)}

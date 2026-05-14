@@ -168,7 +168,7 @@ def verify_execution(user_id: str, task_plan: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Verification results
     """
-    from DRIVER.sandbox_driver import list_directory
+    from DRIVER.sandbox_driver import get_workspace_path, list_directory
     
     workspace = Path(get_workspace_path(user_id))
     expected_files = task_plan.get("target_files", [])

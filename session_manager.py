@@ -56,16 +56,6 @@ class SessionStore:
         """Check if session is still valid (not expired)"""
         return time.time() - session["last_accessed"] < self.SESSION_EXPIRATION
 
-    def cleanup_expired_sessions(self) -> None:
-        """Remove expired sessions"""
-        current_time = time.time()
-        expired_sessions = [
-            sid for sid, session in self.sessions.items()
-            if current_time - session["last_accessed"] >= self.SESSION_EXPIRATION
-        ]
-        for sid in expired_sessions:
-            del self.sessions[sid]
-
     def is_valid_session(self, sid: str) -> bool:
         """Check if a session ID is valid and not expired"""
         session = self.sessions.get(sid)
