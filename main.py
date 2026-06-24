@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 from DRIVER.core_brain import execute_task
 from DRIVER.task_router import router
 from DRIVER.ui_telemetry import get_sidebar_data
-from DRIVER.session_manager import SessionStore
+from session_manager import SessionStore
 
 # ── Session Management ───────────────────────────────────────────────────────
 
@@ -457,7 +457,7 @@ async def list_files(request: Request, session_id: str = None):
     files = list_directory(user_id)
     return {"files": files}
 
-@app.get(f"{API_PREFIX}/files/{filename}")
+@app.get(f"{API_PREFIX}/files/{{filename}}")
 async def read_file(filename: str, request: Request, session_id: str = None):
     """Read a file from workspace."""
     from DRIVER.sandbox_driver import read_from_sandbox, create_sandbox

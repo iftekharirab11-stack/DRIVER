@@ -14,6 +14,8 @@ from DRIVER.sandbox_driver import (
     list_directory, move_file_sandbox, delete_file_sandbox,
     create_archive_sandbox, count_files_sandbox
 )
+# Import telemetry
+from DRIVER.telemetry_logger import TelemetryEntry
 
 WORKSPACE_DIR = "WORKSPACE"
 
@@ -215,10 +217,9 @@ def cowork_read_file(user_id: str, filepath: str, subfolder: str = None) -> str:
     """
     content = read_from_sandbox(user_id, filepath, subfolder)
     from DRIVER.telemetry_logger import telemetry
-    import getpass
     try:
         telemetry.log(
-            type(telemetry).__module__.split('.')[-1].capitalize()(
+            TelemetryEntry(
                 entry_id=f"read_{int(time.time()*1000)}",
                 timestamp=time.time(),
                 user_id=user_id,
@@ -249,7 +250,7 @@ def cowork_write_file(user_id: str, filename: str, content: str,
     from DRIVER.telemetry_logger import telemetry
     try:
         telemetry.log(
-            type(telemetry).__module__.split('.')[-1].capitalize()(
+            TelemetryEntry(
                 entry_id=f"write_{int(time.time()*1000)}",
                 timestamp=time.time(),
                 user_id=user_id,
@@ -313,7 +314,7 @@ def cowork_move_file(user_id: str, src: str, dst: str,
     from DRIVER.telemetry_logger import telemetry
     try:
         telemetry.log(
-            type(telemetry).__module__.split('.')[-1].capitalize()(
+            TelemetryEntry(
                 entry_id=f"move_{int(time.time()*1000)}",
                 timestamp=time.time(),
                 user_id=user_id,
@@ -344,7 +345,7 @@ def cowork_create_archive(user_id: str, archive_name: str,
     from DRIVER.telemetry_logger import telemetry
     try:
         telemetry.log(
-            type(telemetry).__module__.split('.')[-1].capitalize()(
+            TelemetryEntry(
                 entry_id=f"archive_{int(time.time()*1000)}",
                 timestamp=time.time(),
                 user_id=user_id,

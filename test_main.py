@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import sys
+import uuid
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
